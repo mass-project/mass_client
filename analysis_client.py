@@ -34,6 +34,11 @@ def temporary_sample_file(sample_dict):
     yield file.name
     file.close()
 
+def _searialize_datetime(report_data):
+    for key, value in report_data.items():
+        if isinstance(value, datetime.datetime):
+            report_data[key] = value.isoformat()
+
 class AnalysisClient(BaseClient):
     def __init__(self, config_object):
         super(AnalysisClient, self).__init__(config_object)
@@ -82,6 +87,7 @@ class AnalysisClient(BaseClient):
                 logger.info('Analysis system successfully registered with MASS server.')
 
     def submit_report(self, analysis_url, report_data, status_code=0):
+        _searialize_datetime(report_data)
         report_data['status'] = status_code
         self._analyses_in_progress.remove(analysis_url)
         response = HTTPClientWrapper.post_json(analysis_url + 'submit_report/', report_data)
