@@ -202,4 +202,20 @@ class IPAnalysisClient(AnalysisClient):
     def do_analysis(self, analysis_request):
         raise NotImplementedError('You need to inherit from this class and implement this method.')
 
+class URIAnalysisClient(AnalysisClient):
+    def __init__(self, config_object):
+        super(URIAnalysisClient, self).__init__(config_object)
+
+    def analyze(self, analysis_request):
+        if 'sample' in analysis_request :
+            self.sample_dict = get_sample_dict(analysis_request)
+            if self.sample_dict['_cls'].startswith('Sample.URISample'):
+                self.do_analysis(analysis_request)
+            else:
+                msg = 'ERROR - No URI found to scan.'
+                self.send_error_report(analysis_request, msg)
+
+    def do_analysis(self, analysis_request):
+        raise NotImplementedError('You need to inherit from this class and implement this method.')
+
 
