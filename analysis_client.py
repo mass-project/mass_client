@@ -14,6 +14,7 @@ import datetime
 logger = logging.getLogger('mass_client_manager')
 logger.setLevel(logging.INFO)
 
+
 def download_sample_to_file(sample_url, file):
     r = HTTPClientWrapper.get_stream(sample_url + 'download/')
     for block in r.iter_content(1024):
@@ -21,9 +22,11 @@ def download_sample_to_file(sample_url, file):
             break
         file.write(block)
 
+
 def get_sample_dict(analysis_request):
     sample_url = analysis_request['sample']
     return requests.get(sample_url).json()
+
 
 @contextmanager
 def temporary_sample_file(sample_dict):
@@ -34,10 +37,12 @@ def temporary_sample_file(sample_dict):
     yield file.name
     file.close()
 
+
 def _searialize_datetime(report_data):
     for key, value in report_data.items():
         if isinstance(value, datetime.datetime):
             report_data[key] = value.isoformat()
+
 
 class AnalysisClient(BaseClient):
     def __init__(self, config_object):
@@ -86,11 +91,36 @@ class AnalysisClient(BaseClient):
             else:
                 logger.info('Analysis system successfully registered with MASS server.')
 
-    def submit_report(self, analysis_url, report_data, status_code=0):
-        _searialize_datetime(report_data)
-        report_data['status'] = status_code
+    def submit_report(self, analysis_url, analysis_date=datetime.datetime.utcnow(), status_code=0, error_message=None, tags=None,
+                      additional_metadata=None, raw_report_objects=None, json_report_objects=None):
+        if raw_report_objects is None:
+            raw_report_objects = dict()
+        if additional_metadata is None:
+            additional_metadata = dict()
+        if tags is None:
+            tags = []
+        if json_report_objects is None:
+            json_report_objects = dict()
+
+        report_metadata = {
+            'analysis_date': analysis_date,
+            'status': status_code,
+            'error_message': error_message,
+            'tags': tags,
+            'additional_metadata': additional_metadata
+        }
+        _searialize_datetime(report_metadata)
+
+        files = {'metadata': ('metadata', json.dumps(report_metadata), 'application/json')}
+
+        for name, value in raw_report_objects.items():
+            files[name] = (name, open(value, 'rb'), 'binary/octet-stream')
+
+        for name, value in json_report_objects.items():
+            files[name] = (name, json.dumps(value), 'application/json')
+
         self._analyses_in_progress.remove(analysis_url)
-        response = HTTPClientWrapper.post_json(analysis_url + 'submit_report/', report_data)
+        response = requests.post(analysis_url + 'submit_report/', files=files)
 
         if response.status_code != 204:
             logger.warn('Creating report failed: %s', response.text)
@@ -145,10 +175,8 @@ class AnalysisClient(BaseClient):
         except ConnectionError:
             logger.error('MASS server not reachable. Trying again ...')
 
-
     def send_error_report(self, data, msg):
-        report = {'status_message': msg}
-        self.submit_report(data['url'], report, status_code=1)
+        self.submit_report(data['url'], status_code=1, error_message=msg)
         return
 
 
@@ -157,7 +185,7 @@ class FileAnalysisClient(AnalysisClient):
         super(FileAnalysisClient, self).__init__(config_object)
 
     def analyze(self, analysis_request):
-        if 'sample' in analysis_request :
+        if 'sample' in analysis_request:
             self.sample_dict = get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.FileSample'):
                 self.do_analysis(analysis_request)
@@ -201,6 +229,7 @@ class IPAnalysisClient(AnalysisClient):
 
     def do_analysis(self, analysis_request):
         raise NotImplementedError('You need to inherit from this class and implement this method.')
+
 
 class URIAnalysisClient(AnalysisClient):
     def __init__(self, config_object):
