@@ -22,6 +22,3 @@ class GetSampleDictTestCase(unittest.TestCase):
 
         self.assertIn('id', sample_dict)
         self.assertEqual(sample_dict['id'], mock_sample['id'])
-
-
-class 
