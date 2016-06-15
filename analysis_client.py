@@ -1,6 +1,7 @@
 import re
 from .http_client_wrapper import HTTPClientWrapper
 from requests.exceptions import ConnectionError
+from requests.exceptions import RequestException
 import logging
 import json
 from tempfile import NamedTemporaryFile
@@ -9,6 +10,8 @@ from .base_client import BaseClient
 from contextlib import contextmanager
 import requests
 import datetime
+from common_helper_encoder import ReportEncoder
+import socket
 
 # Log configuration
 logger = logging.getLogger('mass_client_manager')
@@ -26,6 +29,7 @@ def download_sample_to_file(sample_url, file):
 def get_sample_dict(analysis_request):
     sample_url = analysis_request['sample']
     return requests.get(sample_url).json()
+
 
 
 @contextmanager
@@ -91,6 +95,40 @@ class AnalysisClient(BaseClient):
             else:
                 logger.info('Analysis system successfully registered with MASS server.')
 
+    def submit_ip(self, ip):
+        try:
+            socket.inet_aton(ip)
+        except:
+            raise ValueError('{} is not a valid IP-address'.format(ip))
+        json_data = {'ip_address': ip}
+        header = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        response = requests.post(self._base_url + 'sample/submit_ip/', data=json.dumps(json_data), headers=header)
+        if response.status_code != 201:
+            raise RequestException('Could not post ip {}'.format(ip))
+        logger.info('Submitted new IP {}'.format(ip))
+        return json.loads(response.content.decode('utf-8'))
+
+    def submit_contacted_by_sample_relation(self, sample_id, contacted_ip):
+        ip_sample_dict = self.submit_ip(contacted_ip)
+        json_data = json.dumps({
+                "sample": ip_sample_dict['id'],
+                "other": sample_id,
+                })
+        header = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        response = requests.post(self._base_url + 'sample_relation/submit_contacted_by/', data=json_data, headers=header)
+        if response.status_code != 201:
+            raise RequestException('Could not post sample relation {} -- {}: {}'.format(contacted_ip, sample_id, response.content))
+        logger.info('Submitted new sample relation to {}'.format(contacted_ip))
+        return json.loads(response.content.decode('utf-8'))
+
     def submit_report(self, analysis_url, analysis_date=datetime.datetime.utcnow(), status_code=0, error_message=None, tags=None,
                       additional_metadata=None, raw_report_objects=None, json_report_objects=None):
         if raw_report_objects is None:
@@ -111,13 +149,13 @@ class AnalysisClient(BaseClient):
         }
         _searialize_datetime(report_metadata)
 
-        files = {'metadata': ('metadata', json.dumps(report_metadata), 'application/json')}
+        files = {'metadata': ('metadata', json.dumps(report_metadata, cls=ReportEncoder), 'application/json')}
 
         for name, value in raw_report_objects.items():
             files[name] = (name, open(value, 'rb'), 'binary/octet-stream')
 
         for name, value in json_report_objects.items():
-            files[name] = (name, json.dumps(value), 'application/json')
+            files[name] = (name, json.dumps(value, cls=ReportEncoder), 'application/json')
 
         self._analyses_in_progress.remove(analysis_url)
         response = requests.post(analysis_url + 'submit_report/', files=files)
@@ -202,7 +240,7 @@ class DomainAnalysisClient(AnalysisClient):
         super(DomainAnalysisClient, self).__init__(config_object)
 
     def analyze(self, analysis_request):
-        if 'sample' in analysis_request :
+        if 'sample' in analysis_request:
             self.sample_dict = get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.DomainSample'):
                 self.do_analysis(analysis_request)
@@ -219,7 +257,7 @@ class IPAnalysisClient(AnalysisClient):
         super(IPAnalysisClient, self).__init__(config_object)
 
     def analyze(self, analysis_request):
-        if 'sample' in analysis_request :
+        if 'sample' in analysis_request:
             self.sample_dict = get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.IPSample'):
                 self.do_analysis(analysis_request)
@@ -236,7 +274,7 @@ class URIAnalysisClient(AnalysisClient):
         super(URIAnalysisClient, self).__init__(config_object)
 
     def analyze(self, analysis_request):
-        if 'sample' in analysis_request :
+        if 'sample' in analysis_request:
             self.sample_dict = get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.URISample'):
                 self.do_analysis(analysis_request)
@@ -246,5 +284,4 @@ class URIAnalysisClient(AnalysisClient):
 
     def do_analysis(self, analysis_request):
         raise NotImplementedError('You need to inherit from this class and implement this method.')
-
 
