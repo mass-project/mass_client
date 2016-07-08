@@ -112,11 +112,13 @@ class AnalysisClient(BaseClient):
         logger.info('Submitted new IP {}'.format(ip))
         return json.loads(response.content.decode('utf-8'))
 
-    def submit_contacted_by_sample_relation(self, sample_id, contacted_ip):
+    def submit_contacted_by_sample_relation(self, sample_url, contacted_ip):
         ip_sample_dict = self.submit_ip(contacted_ip)
+        ip_sample_url = ''.join(ip_sample_dict['url'].split('?id=')) + '/'
+        logger.info('New IP sample {}'.format(ip_sample_url))
         json_data = json.dumps({
-                "sample": ip_sample_dict['id'],
-                "other": sample_id,
+                "sample": ip_sample_url,
+                "other": sample_url,
                 })
         header = {
             'Content-Type': 'application/json',
@@ -125,7 +127,7 @@ class AnalysisClient(BaseClient):
 
         response = requests.post(self._base_url + 'sample_relation/submit_contacted_by/', data=json_data, headers=header)
         if response.status_code != 201:
-            raise RequestException('Could not post sample relation {} -- {}: {}'.format(contacted_ip, sample_id, response.content))
+            raise RequestException('Could not post sample relation {} -- {}: {}'.format(contacted_ip, sample_url, response.content))
         logger.info('Submitted new sample relation to {}'.format(contacted_ip))
         return json.loads(response.content.decode('utf-8'))
 
