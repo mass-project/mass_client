@@ -18,28 +18,9 @@ logger = logging.getLogger('mass_client_manager')
 logger.setLevel(logging.INFO)
 
 
-def download_sample_to_file(sample_url, file):
-    r = HTTPClientWrapper.get_stream(sample_url + 'download/')
-    for block in r.iter_content(1024):
-        if not block:
-            break
-        file.write(block)
-
-
 def get_sample_dict(analysis_request):
     sample_url = analysis_request['sample']
     return requests.get(sample_url).json()
-
-
-
-@contextmanager
-def temporary_sample_file(sample_dict):
-    file = NamedTemporaryFile()
-    chmod(file.name, 0o666)
-    download_sample_to_file(sample_dict['url'], file)
-    file.flush()
-    yield file.name
-    file.close()
 
 
 def _searialize_datetime(report_data):
@@ -56,6 +37,22 @@ class AnalysisClient(BaseClient):
         self._analyses_in_progress = list()
         self._check_registration()
 
+    def download_sample_to_file(self, sample_url, file):
+        r = HTTPClientWrapper.get_stream(sample_url + 'download/', api=self.api_key)
+        for block in r.iter_content(1024):
+            if not block:
+                break
+            file.write(block)
+
+    @contextmanager
+    def temporary_sample_file(self):
+        file = NamedTemporaryFile()
+        chmod(file.name, 0o666)
+        self.download_sample_to_file(self.sample_dict['url'], file)
+        file.flush()
+        yield file.name
+        file.close()
+
     def _get_analysis_system_reference_url(self):
         return self._base_url + 'analysis_system/' + self._analysis_system_name + '/'
 
@@ -64,7 +61,7 @@ class AnalysisClient(BaseClient):
             'analysis_system': self._get_analysis_system_reference_url(),
             'uuid': self._instance_uuid
         }
-        response = HTTPClientWrapper.post_json(self._base_url + 'analysis_system_instance/', registration_data)
+        response = HTTPClientWrapper.post_json(self._base_url + 'analysis_system_instance/', registration_data, api_key=self.api_key)
 
         if response.status_code != 201:
             logger.warn('Registration response: %s', response.text)
@@ -73,7 +70,7 @@ class AnalysisClient(BaseClient):
             return True
 
     def _is_registered(self):
-        response = HTTPClientWrapper.get(self._base_url + 'analysis_system_instance/' + self._instance_uuid + '/')
+        response = HTTPClientWrapper.get(self._base_url + 'analysis_system_instance/' + self._instance_uuid + '/', api_key=self.api_key)
         if response.status_code == 200:
             return True
         elif response.status_code == 404:
@@ -110,6 +107,21 @@ class AnalysisClient(BaseClient):
         if response.status_code != 201:
             raise RequestException('Could not post ip {}'.format(ip))
         logger.info('Submitted new IP {}'.format(ip))
+        return json.loads(response.content.decode('utf-8'))
+
+    def submit_dropped_by_sample_relation(self, archive_url, dropped_sample_url):
+        json_data = json.dumps({
+                "sample": dropped_sample_url,
+                "other": archive_url,
+                })
+        header = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        response = requests.post(self._base_url + 'sample_relation/submit_dropped_by/', data=json_data, headers=header)
+        if response.status_code != 201:
+            raise RequestException('Could not post sample relation {} -- {}: {}'.format(dropped_sample_url, archive_url, response.content))
         return json.loads(response.content.decode('utf-8'))
 
     def submit_contacted_by_sample_relation(self, sample_url, contacted_ip):
@@ -170,7 +182,7 @@ class AnalysisClient(BaseClient):
 
     def _handover_scheduled_analysis_to_application(self, analysis_url):
         self._analyses_in_progress.append(analysis_url)
-        response = HTTPClientWrapper.get(analysis_url)
+        response = HTTPClientWrapper.get(analysis_url, api_key=self.api_key)
 
         # First check if the response was received correctly
         if response.status_code != 200:
@@ -195,7 +207,7 @@ class AnalysisClient(BaseClient):
             logger.info('Polling for scheduled analysis.')
 
             # Get analysis list
-            response = HTTPClientWrapper.get(self._base_url + 'analysis_system_instance/' + self._instance_uuid + '/scheduled_analyses/')
+            response = HTTPClientWrapper.get(self._base_url + 'analysis_system_instance/' + self._instance_uuid + '/scheduled_analyses/', api_key=self.api_key)
             if response.status_code != 200:
                 logger.warn('Polling for scheduled analysis failed: %s', response.text)
                 return False

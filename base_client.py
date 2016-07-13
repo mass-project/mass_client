@@ -12,6 +12,7 @@ class BaseClient(threading.Thread):
         self._base_url = self._server_url + self._global_config['APIEndpoint']
         self._sleep_time = int(self._global_config['SleepTime'])
         self._poll_time = int(self._local_config['PollTime'])
+        self.api_key = self._global_config['api key']
         super(BaseClient, self).__init__()
 
     def poll_server(self):
