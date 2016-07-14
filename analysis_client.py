@@ -1,5 +1,4 @@
 import re
-from .http_client_wrapper import HTTPClientWrapper
 from requests.exceptions import ConnectionError
 from requests.exceptions import RequestException
 import logging
@@ -8,7 +7,6 @@ from tempfile import NamedTemporaryFile
 from os import chmod
 from .base_client import BaseClient
 from contextlib import contextmanager
-import requests
 import datetime
 from common_helper_encoder import ReportEncoder
 import socket
@@ -18,9 +16,6 @@ logger = logging.getLogger('mass_client_manager')
 logger.setLevel(logging.INFO)
 
 
-def get_sample_dict(analysis_request):
-    sample_url = analysis_request['sample']
-    return requests.get(sample_url).json()
 
 
 def _searialize_datetime(report_data):
@@ -37,8 +32,12 @@ class AnalysisClient(BaseClient):
         self._analyses_in_progress = list()
         self._check_registration()
 
+    def get_sample_dict(self, analysis_request):
+        sample_url = analysis_request['sample']
+        return self.request_session.get(sample_url).json()
+
     def download_sample_to_file(self, sample_url, file):
-        r = HTTPClientWrapper.get_stream(sample_url + 'download/', api=self.api_key)
+        r = self.request_session.get(sample_url + 'download/', stream=True)
         for block in r.iter_content(1024):
             if not block:
                 break
@@ -61,7 +60,7 @@ class AnalysisClient(BaseClient):
             'analysis_system': self._get_analysis_system_reference_url(),
             'uuid': self._instance_uuid
         }
-        response = HTTPClientWrapper.post_json(self._base_url + 'analysis_system_instance/', registration_data, api_key=self.api_key)
+        response = self.request_session.post(self._base_url + 'analysis_system_instance/', json.dumps(registration_data))
 
         if response.status_code != 201:
             logger.warn('Registration response: %s', response.text)
@@ -70,7 +69,7 @@ class AnalysisClient(BaseClient):
             return True
 
     def _is_registered(self):
-        response = HTTPClientWrapper.get(self._base_url + 'analysis_system_instance/' + self._instance_uuid + '/', api_key=self.api_key)
+        response = self.request_session.get(self._base_url + 'analysis_system_instance/' + self._instance_uuid + '/')
         if response.status_code == 200:
             return True
         elif response.status_code == 404:
@@ -98,12 +97,7 @@ class AnalysisClient(BaseClient):
         except:
             raise ValueError('{} is not a valid IP-address'.format(ip))
         json_data = {'ip_address': ip}
-        header = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-
-        response = requests.post(self._base_url + 'sample/submit_ip/', data=json.dumps(json_data), headers=header)
+        response = self.request_session.post(self._base_url + 'sample/submit_ip/', data=json.dumps(json_data))
         if response.status_code != 201:
             raise RequestException('Could not post ip {}'.format(ip))
         logger.info('Submitted new IP {}'.format(ip))
@@ -114,12 +108,8 @@ class AnalysisClient(BaseClient):
                 "sample": dropped_sample_url,
                 "other": archive_url,
                 })
-        header = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
 
-        response = requests.post(self._base_url + 'sample_relation/submit_dropped_by/', data=json_data, headers=header)
+        response = self.request_session.post(self._base_url + 'sample_relation/submit_dropped_by/', data=json_data)
         if response.status_code != 201:
             raise RequestException('Could not post sample relation {} -- {}: {}'.format(dropped_sample_url, archive_url, response.content))
         return json.loads(response.content.decode('utf-8'))
@@ -132,12 +122,7 @@ class AnalysisClient(BaseClient):
                 "sample": ip_sample_url,
                 "other": sample_url,
                 })
-        header = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-
-        response = requests.post(self._base_url + 'sample_relation/submit_contacted_by/', data=json_data, headers=header)
+        response = self.request_session.post(self._base_url + 'sample_relation/submit_contacted_by/', data=json_data)
         if response.status_code != 201:
             raise RequestException('Could not post sample relation {} -- {}: {}'.format(contacted_ip, sample_url, response.content))
         logger.info('Submitted new sample relation to {}'.format(contacted_ip))
@@ -172,7 +157,7 @@ class AnalysisClient(BaseClient):
             files[name] = (name, json.dumps(value, cls=ReportEncoder), 'application/json')
 
         self._analyses_in_progress.remove(analysis_url)
-        response = requests.post(analysis_url + 'submit_report/', files=files)
+        response = self.request_session.post(analysis_url + 'submit_report/', files=files)
 
         if response.status_code != 204:
             logger.warn('Creating report failed: %s', response.text)
@@ -182,7 +167,7 @@ class AnalysisClient(BaseClient):
 
     def _handover_scheduled_analysis_to_application(self, analysis_url):
         self._analyses_in_progress.append(analysis_url)
-        response = HTTPClientWrapper.get(analysis_url, api_key=self.api_key)
+        response = self.request_session.get(analysis_url)
 
         # First check if the response was received correctly
         if response.status_code != 200:
@@ -207,7 +192,7 @@ class AnalysisClient(BaseClient):
             logger.info('Polling for scheduled analysis.')
 
             # Get analysis list
-            response = HTTPClientWrapper.get(self._base_url + 'analysis_system_instance/' + self._instance_uuid + '/scheduled_analyses/', api_key=self.api_key)
+            response = self.request_session.get(self._base_url + 'analysis_system_instance/' + self._instance_uuid + '/scheduled_analyses/')
             if response.status_code != 200:
                 logger.warn('Polling for scheduled analysis failed: %s', response.text)
                 return False
@@ -238,7 +223,7 @@ class FileAnalysisClient(AnalysisClient):
 
     def analyze(self, analysis_request):
         if 'sample' in analysis_request:
-            self.sample_dict = get_sample_dict(analysis_request)
+            self.sample_dict = self.get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.FileSample'):
                 self.do_analysis(analysis_request)
             else:
@@ -255,7 +240,7 @@ class DomainAnalysisClient(AnalysisClient):
 
     def analyze(self, analysis_request):
         if 'sample' in analysis_request:
-            self.sample_dict = get_sample_dict(analysis_request)
+            self.sample_dict = self.get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.DomainSample'):
                 self.do_analysis(analysis_request)
             else:
@@ -272,7 +257,7 @@ class IPAnalysisClient(AnalysisClient):
 
     def analyze(self, analysis_request):
         if 'sample' in analysis_request:
-            self.sample_dict = get_sample_dict(analysis_request)
+            self.sample_dict = self.get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.IPSample'):
                 self.do_analysis(analysis_request)
             else:
@@ -289,7 +274,7 @@ class URIAnalysisClient(AnalysisClient):
 
     def analyze(self, analysis_request):
         if 'sample' in analysis_request:
-            self.sample_dict = get_sample_dict(analysis_request)
+            self.sample_dict = self.get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.URISample'):
                 self.do_analysis(analysis_request)
             else:
