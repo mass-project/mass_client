@@ -3,7 +3,6 @@ from .analysis_client import FileAnalysisClient
 from .analysis_client import DomainAnalysisClient
 from .analysis_client import IPAnalysisClient
 from .base_client import BaseClient
-from .http_client_wrapper import HTTPClientWrapper
 
 __all__ = [
         'AnalysisClient',
@@ -11,5 +10,4 @@ __all__ = [
         'FileAnalysisClient',
         'IPAnalysisClient',
         'BaseClient',
-        'HTTPClientWrapper',
             ]
