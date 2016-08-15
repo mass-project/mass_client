@@ -96,6 +96,10 @@ class AnalysisClient(BaseClient):
                 logger.info('Analysis system successfully registered with MASS server.')
 
     def submit_ip(self, ip):
+        """
+        submit an IP sample to the MASS server
+        """
+
         try:
             socket.inet_aton(ip)
         except:
@@ -108,6 +112,19 @@ class AnalysisClient(BaseClient):
         return json.loads(response.content.decode('utf-8'))
 
     def submit_dropped_by_sample_relation(self, archive_url, dropped_sample_url):
+        """
+        Submit a sample relation between a new file, which was dropped during the analysis, and the original file.
+
+        :Example:
+        virus.zip is analysed and contains virus.exe. The file gets
+        extracted by the analysis client and then can submit the new file
+        sample virus.exe and can submit that virus.exe was dropped by
+        virus.zip.
+
+            self.submit_dropped_by(self.sample_dict['url'], virus_url)
+
+        """
+
         data = {
                 "sample": dropped_sample_url,
                 "other": archive_url,
@@ -134,6 +151,32 @@ class AnalysisClient(BaseClient):
 
     def submit_report(self, analysis_url, analysis_date=datetime.datetime.utcnow(), status_code=0, error_message=None, tags=None,
                       additional_metadata=None, raw_report_objects=None, json_report_objects=None):
+        """
+        Submit the report from the analysis back to the MASS server.
+
+        :Note:
+            There are three ways to save the analysis result at MASS:
+
+            * Additional Metadata: When the results of the analysis are very small and qualify as Meta Information, 
+              e.g. the number of found IPs, if a static analysis was possitive etc., the results can be submitted as additional metadata.
+              Note that it is crucial that the amount of meta data stays small. 
+              Otherwise it will become increasingly slower to load the report API endpoint since all metadata are contained in the report JSON object.
+            * JSON Report: If the analysis report can be encoded by the python JSON module it is advisable to submit the report as a JSON object.
+              This will make it later easier to extract information from the report in an automated way. 
+              See the parameter description for how to submit a JSON Report.
+            * Raw Report: If the report of the analysis can not be encoded as an JSON object easily, e.g. pictures, pcap files, then submit a raw report.
+              See the parameter description for how to submit a JSON Report.
+
+        :param analysis_url: URL of the analysis request.
+        :param analysis_date: Datetime of the analysis. Default is datetime.datetime.utcnow()
+        :param additional_metadata: Dictionary of the analysis results. 
+        :param raw_report_objects: Dictionary of the raw analysis results. The dictionary should be of the form {'report_description1' : json_report_object1, ... }.
+        :param json_report_objects: Dictionary of the analysis results. The dictionary should be of the form {'report_description1' : raw_report_object1, ... }.
+        :param tags: Tags to be added to the report for easier searching.
+        :param error_message: Message added to the report if an error occured during the analysis which cannot be resolved. See also the send_error_report function.
+        :param status_code: Status code for the ananlysis. The value should be 0 if the analysis could be performed without errors. See also the send_error_report function.
+        """
+
         if raw_report_objects is None:
             raw_report_objects = dict()
         if additional_metadata is None:
@@ -192,6 +235,8 @@ class AnalysisClient(BaseClient):
         raise NotImplementedError('This method needs to be implemented by a class derived from AnalysisClient')
 
     def poll_server(self):
+        """ Poll the MASS server for new scheduled analysis requests. If there are new requests they will be analysed sequentially.
+        """
         try:
             logger.info('Polling for scheduled analysis.')
 
@@ -217,6 +262,16 @@ class AnalysisClient(BaseClient):
             logger.error('MASS server not reachable. Trying again ...')
 
     def send_error_report(self, data, msg):
+        """
+        If an error occured during the analysis which can not be resolved by the
+        analysis client, use this function to send an error report to the MASS
+        server.
+
+        :param data: The analysis request which caused the error.
+        :param msg: Additional information about the error.
+        :type data: dictionary
+        :type msg: string
+        """
         self.submit_report(data['url'], status_code=1, error_message=msg)
         return
 
@@ -256,6 +311,9 @@ class DomainAnalysisClient(AnalysisClient):
         super(DomainAnalysisClient, self).__init__(config_object)
 
     def analyze(self, analysis_request):
+        """ Ensure that the analysis request was made for a domain sample or a sub-type and perform the analysis.
+        """
+
         if 'sample' in analysis_request:
             self.sample_dict = self.get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.DomainSample'):
@@ -278,6 +336,9 @@ class IPAnalysisClient(AnalysisClient):
         super(IPAnalysisClient, self).__init__(config_object)
 
     def analyze(self, analysis_request):
+        """ Ensure that the analysis request was made for an IP sample or a sub-type and perform the analysis.
+        """
+
         if 'sample' in analysis_request:
             self.sample_dict = self.get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.IPSample'):
@@ -300,6 +361,9 @@ class URIAnalysisClient(AnalysisClient):
         super(URIAnalysisClient, self).__init__(config_object)
 
     def analyze(self, analysis_request):
+        """ Ensure that the analysis request was made for an URI sample or a sub-type and perform the analysis.
+        """
+
         if 'sample' in analysis_request:
             self.sample_dict = self.get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.URISample'):
