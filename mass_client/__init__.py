@@ -9,5 +9,6 @@ __all__ = [
         'DomainAnalysisClient',
         'FileAnalysisClient',
         'IPAnalysisClient',
+        'URIAnalysisClient',
         'BaseClient',
             ]

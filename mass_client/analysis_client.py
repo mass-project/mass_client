@@ -17,8 +17,6 @@ logger = logging.getLogger('mass_client_manager')
 logger.setLevel(logging.INFO)
 
 
-
-
 def _searialize_datetime(report_data):
     for key, value in report_data.items():
         if isinstance(value, datetime.datetime):
@@ -26,6 +24,11 @@ def _searialize_datetime(report_data):
 
 
 class AnalysisClient(BaseClient):
+    """ Base class for analysis clients connecting to a MASS server.
+
+    Do not use this class as a base class for analysis clients. Instead use one of the specific analysis client base classes
+    or derive your own base class for a type of sample to analyse.
+    """
     def __init__(self, config_object):
         super(AnalysisClient, self).__init__(config_object)
         self._instance_uuid = self._local_config['UUID']
@@ -219,10 +222,16 @@ class AnalysisClient(BaseClient):
 
 
 class FileAnalysisClient(AnalysisClient):
+    """ Base class for analysis clients to analyse files.
+
+    Derive your specific analysis client class from this base class.
+    """
     def __init__(self, config_object):
         super(FileAnalysisClient, self).__init__(config_object)
 
     def analyze(self, analysis_request):
+        """ Ensure that the analysis request was made for a file sample or a sub-type and perform the analysis.
+        """
         if 'sample' in analysis_request:
             self.sample_dict = self.get_sample_dict(analysis_request)
             if self.sample_dict['_cls'].startswith('Sample.FileSample'):
@@ -232,10 +241,17 @@ class FileAnalysisClient(AnalysisClient):
                 self.send_error_report(analysis_request, msg)
 
     def do_analysis(self, analysis_request):
+        """ Do the actual analysis. Overwrite this function in your derived class.
+        """
         raise NotImplementedError('You need to inherit from this class and implement this method.')
 
 
 class DomainAnalysisClient(AnalysisClient):
+    """ Base class for analysis clients to analyse domains.
+
+    Derive your specific analysis client class from this base class.
+    """
+
     def __init__(self, config_object):
         super(DomainAnalysisClient, self).__init__(config_object)
 
@@ -253,6 +269,11 @@ class DomainAnalysisClient(AnalysisClient):
 
 
 class IPAnalysisClient(AnalysisClient):
+    """ Base class for analysis clients to analyse IP addresses.
+
+    Derive your specific analysis client class from this base class.
+    """
+
     def __init__(self, config_object):
         super(IPAnalysisClient, self).__init__(config_object)
 
@@ -270,6 +291,11 @@ class IPAnalysisClient(AnalysisClient):
 
 
 class URIAnalysisClient(AnalysisClient):
+    """ Base class for analysis clients to analyse URIs.
+
+    Derive your specific analysis client class from this base class.
+    """
+
     def __init__(self, config_object):
         super(URIAnalysisClient, self).__init__(config_object)
 
