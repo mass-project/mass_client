@@ -37,10 +37,31 @@ class AnalysisClient(BaseClient):
         self._check_registration()
 
     def get_sample_dict(self, analysis_request):
+        """
+        Retrieve the dictionary of the sample of the analysis request.
+
+        The analysis request contains only the unique URL of the sample from the MASS server. 
+        To analyse the sample one usually needs more information about the sample.
+        This function extracts the sample URL from the analysis request and
+        returns a dictionary with the information from the MASS server.
+
+        :param analysis_request: analysis request
+        :returns: dictionary with information about the sample from the analysis request
+        """
         sample_url = analysis_request['sample']
         return self.http_client.get(sample_url).json()
 
     def download_sample_to_file(self, sample_url, file):
+        """
+        Download the file sample.
+
+        :param sample_url: URL of the file sample.
+        :param file: path were the file should be downloaded to
+
+        :Note:
+        If you want to download the file for an analysis it is advisable to download the file to a temporary location.
+        In this case it will be easier to use the AnalysisClient.temporary_sample_file() context manager.
+        """
         r = self.http_client.get_stream(sample_url + 'download/')
         for block in r.iter_content(1024):
             if not block:
@@ -49,6 +70,12 @@ class AnalysisClient(BaseClient):
 
     @contextmanager
     def temporary_sample_file(self):
+        """
+        Context manager to download the file sample from the current analysis request to a temporary location.
+
+        :note:
+        The context manager will yield the path of the file, **not** an python file object.
+        """
         file = NamedTemporaryFile()
         chmod(file.name, 0o666)
         self.download_sample_to_file(self.sample_dict['url'], file)
