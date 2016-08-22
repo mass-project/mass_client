@@ -1,4 +1,3 @@
 sphinx>=1.3.5
-requests
+requests>=2.11.1
 git+ssh://git@atlassian-net.cs.uni-bonn.de:7999/ch/common_helper_encoder.git
-/home/timm/Documents/mass/mass_client
