@@ -1,16 +1,7 @@
-"""
-AnalysisClient
-==============
-
-Example
---------------
-
-
-"""
-
 import logging
 import mass_api_client.resources as mass_resources
 from mass_api_client import ConnectionManager
+from mass_api_client.resources import Report
 import time
 import configparser
 
@@ -20,6 +11,13 @@ logger.setLevel(logging.INFO)
 shandler = logging.StreamHandler()
 shandler.setLevel(logging.INFO)
 logger.addHandler(shandler)
+
+
+def _add_filename(report_dict):
+    if report_dict:
+        for report_key, report in report_dict.items():
+            report_dict[report_key] = (report_key, report)
+    return report_dict
 
 
 class AnalysisClient(mass_resources.AnalysisSystem):
@@ -32,6 +30,15 @@ class AnalysisClient(mass_resources.AnalysisSystem):
         super().__init__(**kwargs)
         self._analyses_in_progress = list()
         self._should_terminate = False
+
+    def submit_report(self, scheduled_analysis, additional_metadata=None, json_report_objects=None, raw_report_objects=None):
+        Report.create(
+            scheduled_analysis,
+            json_report_objects=_add_filename(json_report_objects),
+            raw_report_objects=_add_filename(raw_report_objects),
+            additional_metadata=additional_metadata
+        )
+
 
     @classmethod
     def create_from_config(cls, config_path):
