@@ -12,3 +12,8 @@ __all__ = [
         # 'URIAnalysisClient',
         # 'BaseClient',
             ]
+
+# import logging
+# from logging import NullHandler
+
+# logging.getLogger(__name__).addHandler(NullHandler())

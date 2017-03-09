@@ -6,11 +6,8 @@ import time
 import configparser
 
 # Log configuration
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-shandler = logging.StreamHandler()
-shandler.setLevel(logging.INFO)
-logger.addHandler(shandler)
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 def _add_filename(report_dict):
@@ -31,7 +28,7 @@ class AnalysisClient(mass_resources.AnalysisSystem):
         self._analyses_in_progress = list()
         self._should_terminate = False
 
-    def submit_report(self, scheduled_analysis, additional_metadata=None, json_report_objects=None, raw_report_objects=None):
+    def submit_report(self, scheduled_analysis, additional_metadata={}, json_report_objects=None, raw_report_objects=None):
         Report.create(
             scheduled_analysis,
             json_report_objects=_add_filename(json_report_objects),
@@ -41,9 +38,7 @@ class AnalysisClient(mass_resources.AnalysisSystem):
 
 
     @classmethod
-    def create_from_config(cls, config_path):
-        config = configparser.ConfigParser()
-        config.read_file(open(config_path, 'r'))
+    def create_from_config(cls, config):
         base_config = config['Base']
         client_config = config['Client']
         ConnectionManager().register_connection('default', base_config['ApiKey'], base_config['Server'])
@@ -58,6 +53,7 @@ class AnalysisClient(mass_resources.AnalysisSystem):
             self._analysis_system_instance = self.create_analysis_system_instance()
             config['Client']['UUID'] = self._analysis_system_instance.uuid
             config.write(open(config_path, 'w'))
+        self.config = config
         self._sleep_time = base_config.getint('SleepTime')
         self._poll_time = base_config.getint('PollTime')
         return self
@@ -74,7 +70,7 @@ class AnalysisClient(mass_resources.AnalysisSystem):
         self._should_terminate = True
 
     def start(self):
-        logger.info('Starting the analysis client.')
+        log.info('Starting the analysis client.')
         time_since_last_poll = 0
         do_poll = True
         while True:
@@ -92,7 +88,7 @@ class AnalysisClient(mass_resources.AnalysisSystem):
     def poll_server(self):
         """ Poll the MASS server for new scheduled analysis requests. If there are new requests they will be analysed sequentially.
         """
-        logger.info('Polling for scheduled analyses.')
+        log.info('Polling for scheduled analyses.')
 
         # See if there is something to do
         analysis_list = self._analysis_system_instance.get_scheduled_analyses()
