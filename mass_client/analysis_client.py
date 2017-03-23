@@ -17,16 +17,33 @@ def _add_filename(report_dict):
     return report_dict
 
 
-class AnalysisClient(mass_resources.AnalysisSystem):
+class AnalysisClient():
     """ Base class for analysis clients connecting to a MASS server.
 
     Do not use this class as a base class for analysis clients. Instead use one of the specific analysis client base classes
     or derive your own base class for a type of sample to analyse.
     """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, config):
         self._analyses_in_progress = list()
         self._should_terminate = False
+
+        base_config = config['Base']
+        client_config = config['Client']
+        ConnectionManager().register_connection('default', base_config['ApiKey'], base_config['Server'])
+        if 'UUID' in client_config.keys():
+            self._analysis_system = mass_resources.AnalysisSystem.get(client_config['Identifier'])
+            self._analysis_system_instance = mass_resources.AnalysisSystemInstance.get(client_config['UUID'])
+        else:
+            identifier = client_config['Identifier']
+            verbose_name = client_config['VerboseName']
+            tag_filter_expression = client_config.get('FilterExpression', '')
+            self._analysis_system = mass_resources.AnalysisSystem.create(identifier, verbose_name, tag_filter_expression)
+            self._analysis_system_instance = self._analysis_system.create_analysis_system_instance()
+            config['Client']['UUID'] = self._analysis_system_instance.uuid
+            config.write(open(config_path, 'w'))
+        self.config = config
+        self._sleep_time = base_config.getint('SleepTime')
+        self._poll_time = base_config.getint('PollTime')
 
     def submit_report(self, scheduled_analysis, additional_metadata={}, json_report_objects=None, raw_report_objects=None):
         Report.create(
@@ -35,28 +52,6 @@ class AnalysisClient(mass_resources.AnalysisSystem):
             raw_report_objects=_add_filename(raw_report_objects),
             additional_metadata=additional_metadata
         )
-
-
-    @classmethod
-    def create_from_config(cls, config):
-        base_config = config['Base']
-        client_config = config['Client']
-        ConnectionManager().register_connection('default', base_config['ApiKey'], base_config['Server'])
-        if 'UUID' in client_config.keys():
-            self = cls.get(client_config['Identifier'])
-            self._analysis_system_instance = mass_resources.AnalysisSystemInstance.get(client_config['UUID'])
-        else:
-            identifier = client_config['Identifier']
-            verbose_name = client_config['VerboseName']
-            tag_filter_expression = client_config.get('FilterExpression', '')
-            self = cls.create(identifier, verbose_name, tag_filter_expression)
-            self._analysis_system_instance = self.create_analysis_system_instance()
-            config['Client']['UUID'] = self._analysis_system_instance.uuid
-            config.write(open(config_path, 'w'))
-        self.config = config
-        self._sleep_time = base_config.getint('SleepTime')
-        self._poll_time = base_config.getint('PollTime')
-        return self
 
     def analyze(self, scheduled_analysis):
         """Process the analysis request.
