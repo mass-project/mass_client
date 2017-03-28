@@ -40,7 +40,6 @@ class AnalysisClient():
             self._analysis_system = mass_resources.AnalysisSystem.create(identifier, verbose_name, tag_filter_expression)
             self._analysis_system_instance = self._analysis_system.create_analysis_system_instance()
             config['Client']['UUID'] = self._analysis_system_instance.uuid
-            config.write(open(config_path, 'w'))
         self.config = config
         self._sleep_time = base_config.getint('SleepTime')
         self._poll_time = base_config.getint('PollTime')
