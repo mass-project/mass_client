@@ -1,10 +1,9 @@
-import os
-import subprocess
+from mass_client import __version__
 from setuptools import setup, find_packages
 
 setup(
     name="mass_client",
-    version=subprocess.check_output(['git', 'describe', '--always'], cwd=os.path.dirname(os.path.abspath(__file__))).strip().decode('utf-8'),
+    version=__version__,
     packages=find_packages(),
     dependency_links=['https://github.com/mass-project/mass_api_client.git']
 )
