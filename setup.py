@@ -1,9 +1,8 @@
-from mass_client import __version__
 from setuptools import setup, find_packages
 
 setup(
     name="mass_client",
-    version=__version__,
+    version='0.1',
     packages=find_packages(),
     dependency_links=['https://github.com/mass-project/mass_api_client.git']
 )

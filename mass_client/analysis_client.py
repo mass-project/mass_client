@@ -3,7 +3,7 @@ import mass_api_client.resources as mass_resources
 from mass_api_client import ConnectionManager
 from mass_api_client.resources import Report
 import time
-import configparser
+from requests.exceptions import HTTPError
 
 # Log configuration
 log = logging.getLogger(__name__)
@@ -37,7 +37,10 @@ class AnalysisClient():
             identifier = client_config['Identifier']
             verbose_name = client_config['VerboseName']
             tag_filter_expression = client_config.get('FilterExpression', '')
-            self._analysis_system = mass_resources.AnalysisSystem.create(identifier, verbose_name, tag_filter_expression)
+            try:
+                self._analysis_system = mass_resources.AnalysisSystem.get(identifier)
+            except HTTPError: 
+                self._analysis_system = mass_resources.AnalysisSystem.create(identifier, verbose_name, tag_filter_expression)
             self._analysis_system_instance = self._analysis_system.create_analysis_system_instance()
             config['Client']['UUID'] = self._analysis_system_instance.uuid
         self.config = config
